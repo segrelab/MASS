@@ -1,0 +1,265 @@
+---
+title: "yeast data figures"
+author: "Elena"
+date: "12/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+library(tidyverse)
+library(viridis)
+```
+
+```{r}
+### import and format yeast data ###
+rawDat <- readxl::read_xlsx(here("yeast_data", "summary_2ndEdition.xlsx"), sheet = "Sheet1", trim_ws = TRUE) %>% 
+  filter(!strain == "dummyVars") # second row has the dummy vars, remove
+
+# get list of carbon sources included in analysis
+cSources <- readxl::read_xlsx(here("yeast_data", "summary_2ndEdition.xlsx"), sheet = "Sheet2", trim_ws = TRUE) 
+# subset features
+rawDat <- rawDat %>% select(c(cSources$carbon_source, "strain"))
+# remove the word "growth" from column names
+rawDat <- rawDat %>%
+  setNames(tolower(gsub("growth", "", names(.))))
+
+# replace characters with numbers, see above
+data2ndEd <- rawDat %>%
+  mutate(across(everything(), ~replace(., . %in%  c("D", "V", "W") , 1))) %>%
+  mutate(across(everything(), ~replace(., . == "+", 2))) %>%
+  mutate(across(everything(), ~replace(., . == "-", 0))) %>%
+  mutate(across(everything(), ~replace(., . == "?", NA)))
+
+# remove rows with unknown feature values (NAs)
+data2ndEd <- data2ndEd %>%
+  drop_na()
+```
+
+```{r}
+### Figure 4A ###
+# name rows and get rid of strain column
+d <- select(data2ndEd, -strain)
+# convert to numeric for heatmap
+d <- d %>%
+  mutate(across(everything(), ~as.numeric(.)))
+# name rows to label heatmap
+rownames(d) <- data2ndEd$strain
+
+pheatmap::pheatmap(t(d),
+                   clustering_distance_rows = "euclidean",
+                   clustering_distance_cols = "euclidean", 
+                   clustering_method = "complete",
+                   color = viridis(3),
+                   show_colnames = FALSE,
+                   fontsize = 14)
+```
+
+```{r}
+# hclust to get order for plots, same as heatmap above 
+# order for carbon sources
+d.dist <- dist(t(d), method = "euclidean")
+d.clust <- hclust(d.dist, method = "complete")
+# order for strains
+e.dist <- dist(d, method = "euclidean")
+e.clust <- hclust(e.dist, method = "complete")
+```
+
+```{r}
+### Figure 4B ###
+# percentage of yeast strains growing on each carbon source
+ord <- colnames(d[, d.clust$order])
+
+d %>%
+  pivot_longer(everything(), names_to = 'carbon', values_to = 'growth') %>%
+  mutate(carbon = factor(carbon, levels = ord)) %>%
+  ggplot(aes(x = reorder(carbon, desc(carbon)), fill = as.factor(growth))) +
+  geom_bar(position = "fill", width = 1) +
+  scale_y_continuous(labels = scales::percent) +
+  theme_classic() +
+  theme(text = element_text(size = 18, color = "black"),
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(hjust = 0.5, color = "black")) +
+    #theme(text = element_blank()) +
+  scale_fill_viridis(discrete = TRUE) +
+  guides(fill = "none") +
+  labs(x = "Carbon Source",
+       y = "Percentage of Strains") +
+  coord_flip()
+```
+
+```{r}
+### Figure 4C ###
+# the order of the bars (strains) matches the order of the strains in the heat map
+data2ndEd %>%
+  slice(e.clust$order) %>%
+  pivot_longer(-strain, names_to = 'carbon', values_to = 'growth') %>%
+  ggplot(aes(x = strain, fill = growth)) +
+  geom_bar(position = "fill", width = 1) +
+  scale_y_continuous(labels = scales::percent) +
+  theme_classic() +
+  theme(text = element_text(size = 18, color = "black"),
+        axis.text.x = element_blank(),
+        #axis.text.y = element_blank(),
+        axis.ticks.x = element_blank()) +
+  scale_fill_viridis(discrete = TRUE) +
+  guides(fill = "none") +
+  labs(x = "Strains",
+       y = "Percentage of Carbon Sources")
+```
+
+```{r}
+# read in f1 scores
+yeastf1 <- read_csv(here("yeast_data", "MIP_classify_f1_scores_greedy2_20200416.csv")) %>%
+    arrange(num_predictors)
+### note that D-Glucose is excluded from models because almost all strains exhibited growth on it ###
+```
+
+```{r}
+# format data
+yeastf1_wide <- yeastf1 %>%
+  pivot_wider(names_from = response, values_from = `f1 score`)
+# c sources selected as predictors will have NA, change to 0
+yeastf1_wide[is.na(yeastf1_wide)] <- 1
+# anything w f1 score was a response & all f1 < 1, so convert all < 1 to 0, meaning NOT chosen as predictor
+yeastf1_wide[yeastf1_wide < 1] <- 0
+
+# create an order for c sources from least to most times selected as predictor
+ord <- yeastf1_wide %>% 
+  select(-num_predictors) %>%
+  colSums() %>% 
+  sort()
+```
+
+```{r}
+### Figure 5A ###
+# format for heatmap
+w <- yeastf1_wide %>%
+  select(names(ord))
+rownames(w) <- seq.int(nrow(w)) 
+# heatmap
+pheatmap::pheatmap(t(w),
+                   cluster_rows = FALSE,
+                   cluster_cols = FALSE,
+                   color = c("black", "gray"),
+                   angle_col = 0,
+                   fontsize = 14)
+```
+
+```{r}
+# function for Shannon entropy
+entropy <- function(target) {
+  freq <- table(target)/length(target)
+  # vectorize
+  vec <- as.data.frame(freq)[,2]
+  #drop 0 to avoid NaN resulting from log2
+  vec<-vec[vec>0]
+  #compute entropy
+  -sum(vec * log2(vec))
+}
+
+# compute entropy
+e <- lapply(select(data2ndEd, -strain), entropy) 
+# format data
+# match order to heatmap of c sources selected as predictors
+ord2 <- tolower(colnames(w)) %>%trimws()
+ent <- data.frame(carbon_source = names(e),
+                  entropy = unlist(e)) %>%
+  mutate(across(everything(), ~trimws(.))) %>%
+  mutate(carbon_source = factor(carbon_source, levels = ord2)) %>%
+  arrange(carbon_source)
+```
+
+```{r}
+### Figure 5B ###
+a <- ent %>%
+  filter(!carbon_source == "d-glucose") %>%
+  ggplot(aes(x = reorder(carbon_source, desc(carbon_source)), y = as.numeric(entropy), fill = carbon_source)) +
+  geom_col(width = 1) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.y = element_text(hjust = 0.5, colour = "black")) +
+  scale_fill_viridis(discrete = TRUE) +
+  guides(fill = "none") +
+  labs(x = "",
+       y = "Shannon Entropy") +
+  coord_flip()
+a
+```
+
+```{r}
+## fig 5C ##
+b <- yeastf1 %>%
+  mutate(across(everything(), ~trimws(.))) %>%
+  mutate(response = tolower(response)) %>%
+  mutate(response = factor(response, levels = ord2)) %>%
+  arrange(response) %>%
+  ggplot(aes(x = as.numeric(num_predictors), y = as.numeric(`f1 score`), color = response)) +
+  geom_line() +
+  theme_classic() +
+  theme(text = element_text(size = 14)) +
+  guides(color = "none") +
+  scale_color_viridis(discrete = TRUE) +
+  labs(x = "Number of Predictors",
+       y = "Accuracy",
+       color = "Carbon Source")
+b
+```
+
+```{r}
+### Figure S1 ###
+rwdat <- readxl::read_xlsx(here("yeast_data", "summary_2ndEdition.xlsx"), sheet = "Sheet1", trim_ws = TRUE) %>% 
+  filter(!strain == "dummyVars") %>%
+  select(c(cSources$carbon_source, "strain")) %>%
+  setNames(tolower(gsub("growth", "", names(.))))
+
+allyeast <- rwdat %>%
+  mutate(across(everything(), ~replace(., . == "+", "P"))) %>%
+  mutate(across(everything(), ~replace(., . == "-", "N"))) %>%
+  mutate(across(everything(), ~replace(., . == "?", NA))) %>%
+  drop_na() %>%
+  select(strain, everything())
+
+yeastLong <- allyeast %>%
+  pivot_longer(-strain, names_to = "carbon_source", values_to = "phenotype") %>%
+  mutate(phenotype = factor(phenotype, levels = c("P", "N", "D", "V", "W")))
+
+yeastLong %>%
+  ggplot(aes(x = phenotype, group = carbon_source, fill = phenotype)) +
+  geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat="count") +
+  scale_y_continuous(labels=scales::percent) +
+  facet_wrap(~carbon_source, ncol = 5) +
+  theme_classic() +
+  theme(text = element_text(size =  14, color = "black"),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        legend.position = c(0.8, 0.05), legend.direction = "horizontal") +
+  scale_fill_viridis(option = "G", discrete = TRUE, labels = c("Positive", "Negative", "Delayed", "Variable", "Weak")) +
+  labs(x = "Growth",
+       y = "Percentage of Strains",
+       fill = "Phenotype") +
+  guides(fill=guide_legend(title.position = "top", nrow=2,byrow=TRUE))
+
+```
+
+```{r}
+### Figure S2B ###
+y <- yeastf1_wide %>%
+  select(-num_predictors) %>% 
+  colSums()
+yeast_pred <- data_frame(carbon_source = tolower(names(y)),
+                         num_pred = y)
+ent2 <- ent %>%
+  mutate(entropy = as.numeric(entropy)) %>%
+  inner_join(yeast_pred, by = "carbon_source")
+
+ent2 %>%
+  ggplot(aes(x = entropy, y = num_pred)) +
+  geom_point() +
+  theme_classic() +
+  theme(text = element_text(size = 14)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(10)) +
+  
+  labs(x = "Shannon Entropy",
+       y = "Times Selected as Predictor")
+```

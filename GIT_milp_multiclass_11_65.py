@@ -1,7 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 Prediction of representative phenotypes using multi-output subset selection
-
+Author: wty@bu.edu
+If you find it useful, please cite our paper as follows:
+@phdthesis{wang2020data,
+  title={Data analytics and optimization methods in biomedical systems: from microbes to humans},
+  author={Wang, Taiyao},
+  year={2020}
+}
+In the python code, I use microF1 as metrics for RF/LR. One interesting fact: the micro average for binary classification (not for >=3 classes) is equal for Precision, Recall and F1 score 
+     because micro averaging these metrics results in overall Accuracy.
 """
 
 from sklearn.metrics import f1_score, accuracy_score

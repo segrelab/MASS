@@ -1,0 +1,23 @@
+---
+title: "moss_figure_2"
+author: "Elena"
+date: "6/17/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(viridis)
+```
+
+```{r}
+gp <- readxl::read_xlsx('growth_profiles_binary.xlsx')
+
+dat <- select(gp, -strain)
+rownames(dat) <- gp$strain
+
+pheatmap::pheatmap(t(dat),
+                   cluster_rows = FALSE,
+                   color = viridis(2))
+```
+

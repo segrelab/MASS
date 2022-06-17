@@ -1,0 +1,150 @@
+---
+title: "man 1 figure 3"
+author: "Elena"
+date: "11/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(pheatmap)
+library(flextable)
+library(officer)
+```
+
+```{r}
+# create random binary matrix
+rr <- 4
+c <- 6
+m0 <- matrix(0, rr, c)
+m1 <- apply(m0, c(1,2), function(x) sample(c(0,1),1)) 
+colnames(m1) <- LETTERS[1:6]
+m3 <- as_tibble(m1) 
+```
+
+```{r}
+# formatting for flextable
+theme_design <- function(x) {
+  x <- border_remove(x)
+  std_border <- fp_border_default(width = 4, color = "white")
+  x <- fontsize(x, size = 14, part = "all")
+  x <- font(x, fontname = "Arial", part = "all")
+  x <- align(x, align = "center", part = "all")
+  x <- bold(x, bold = TRUE, part = "all")
+  x <- color(x, color = "white", part = "all")
+  x <- padding(x, padding = 6, part = "all")
+  x <- border_outer(x, part="all", border = std_border )
+  x <- border_inner_h(x, border = std_border, part="all")
+  x <- border_inner_v(x, border = std_border, part="all")
+  x <- set_table_properties(x, layout = "fixed")
+  x
+}
+```
+
+```{r}
+# full table
+flextable(m3) %>%
+  bg(bg = ifelse(m3 > 0, "#FDE725FF", "#440154FF"), part = "body") %>%
+  bg(bg = "#238A8DFF", part = "header") %>%
+  autofit() %>%
+  add_header_lines("Features") %>% 
+  theme_design() %>%
+  fontsize(size = -1, part = "body")
+```
+
+```{r}
+# p = 1
+matsub <- select(m3, C)
+headercolor <- "gray"
+flextable(matsub) %>% 
+  bg(bg = ifelse(matsub > 0, "#FDE725FF", "#440154FF"), part = "body") %>%
+  bg(bg = headercolor, part = "header") %>%
+  autofit() %>%
+  theme_design() %>%
+  fontsize(size = -1, part = "body")
+
+matsub <- select(m3, -C)
+headercolor <- "black"
+flextable(matsub) %>% 
+  bg(bg = ifelse(matsub > 0, "#FDE725FF", "#440154FF"), part = "body") %>%
+  bg(bg = headercolor, part = "header") %>%
+  autofit() %>%
+  theme_design() %>%
+  fontsize(size = -1, part = "body")
+
+# p = 2
+matsub <- select(m3, D, `F`)
+headercolor <- "gray"
+flextable(matsub) %>% 
+  bg(bg = ifelse(matsub > 0, "#FDE725FF", "#440154FF"), part = "body") %>%
+  bg(bg = headercolor, part = "header") %>%
+  autofit() %>%
+  theme_design() %>%
+  fontsize(size = -1, part = "body")
+
+matsub <- select(m3, -D, -`F`)
+headercolor <- "black"
+flextable(matsub) %>% 
+  bg(bg = ifelse(matsub > 0, "#FDE725FF", "#440154FF"), part = "body") %>%
+  bg(bg = headercolor, part = "header") %>%
+  autofit() %>%
+  theme_design() %>%
+  fontsize(size = -1, part = "body")
+
+# p = 3
+matsub <- select(m3, A, B, D)
+headercolor <- "gray"
+flextable(matsub) %>% 
+  bg(bg = ifelse(matsub > 0, "#FDE725FF", "#440154FF"), part = "body") %>%
+  bg(bg = headercolor, part = "header") %>%
+  autofit() %>%
+  theme_design() %>%
+  fontsize(size = -1, part = "body")
+
+matsub <- select(m3, -A, -B, -D)
+headercolor <- "black"
+flextable(matsub) %>% 
+  bg(bg = ifelse(matsub > 0, "#FDE725FF", "#440154FF"), part = "body") %>%
+  bg(bg = headercolor, part = "header") %>%
+  autofit() %>%
+  theme_design() %>%
+  fontsize(size = -1, part = "body")
+```
+
+```{r}
+# random accuracy plot
+rantan <- data.frame(dim1 = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     dim2 = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+
+rantan %>%
+  ggplot(aes(x =  dim1, y = dim2)) +
+  geom_jitter(size = 2.5, width = 0, height = 3) +
+  theme_classic() +
+  theme(text = element_text(size = 16),
+        axis.text = element_blank(),
+        axis.ticks = element_blank()) +
+  scale_x_continuous(breaks = scales::pretty_breaks(10)) +
+  labs(x = "Number of Predictors",
+       y = "Accuracy")
+```
+
+```{r}
+# 
+predMat <- tibble(p1 = c(0, 0, 1, 0, 0, 0),
+                  p2 = c(0, 0, 0, 1, 0, 1),
+                  p3 = c(1, 1, 0, 1, 0, 0),
+                  p4 = c(1, 1, 0, 1, 0, 1),
+                  p5 = c(1, 1, 0, 1, 1, 1))
+
+ordRow <- c(3, 5, 6, 1, 2, 4)
+predMatOrd <- predMat[ordRow, ]
+pheatmap::pheatmap(predMatOrd,
+                   cluster_cols = FALSE,
+                   cluster_rows = FALSE,
+                   color = c("black", "gray"),
+                   angle_col = 0,
+                   fontsize = 14,
+                   labels_row = c("C", "E", "F", "A", "B", "D"),
+                   labels_col = seq(1:5))
+```

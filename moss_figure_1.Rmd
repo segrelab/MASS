@@ -1,7 +1,7 @@
 ---
 title: "man 1 figure 3"
-author: "Elena"
-date: "11/17/2021"
+author: "Elena & Konrad"
+date: "03/03/2023"
 output: html_document
 ---
 
@@ -10,10 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(pheatmap)
 library(flextable)
-library(officer)
 ```
 
 ```{r}
+set.seed(123)
 # create random binary matrix
 rr <- 4
 c <- 6
@@ -114,17 +114,17 @@ flextable(matsub) %>%
 
 ```{r}
 # random accuracy plot
-rantan <- data.frame(dim1 = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                     dim2 = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+rantan <- data.frame(dim1 = c(1, 2, 3, 4, 5),
+                     dim2 = c(1, 2, 3, 4, 5))
 
 rantan %>%
   ggplot(aes(x =  dim1, y = dim2)) +
   geom_jitter(size = 2.5, width = 0, height = 3) +
   theme_classic() +
   theme(text = element_text(size = 16),
-        axis.text = element_blank(),
-        axis.ticks = element_blank()) +
-  scale_x_continuous(breaks = scales::pretty_breaks(10)) +
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  scale_x_continuous(breaks = scales::pretty_breaks(5)) +
   labs(x = "Number of Predictors",
        y = "Accuracy")
 ```

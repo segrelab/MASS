@@ -1,0 +1,927 @@
+---
+title: "MASS Figures"
+author: "Konrad Herbst (with code from Elena Forchielli)"
+date: "3/1/2021; revised 11/2023"
+output:
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+# Set-Up and Helper Functions
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(viridis)
+library(patchwork)
+library(ggpubr)
+```
+
+```{r}
+# compute Shannon entropy
+entropy <- function(target) {
+  freq <- table(target)/length(target)
+  # vectorize
+  vec <- as.data.frame(freq)[,2]
+  #drop 0 to avoid NaN resulting from log2
+  vec<-vec[vec>0]
+  #compute entropy
+  -sum(vec * log2(vec))
+}
+```
+
+```{r}
+my_breaks <- function(x, b = 5){
+  x <- as.numeric(x)
+  ret <- sapply(x, function(xx){
+    ifelse(xx %% b == 0 | xx == x[[1]] | xx == x[[length(x)]], as.character(xx), '')
+  })
+  return(ret)
+}
+```
+
+```{r}
+# read balanced accuracy scores (calculated over all RFs per predictor)
+read_performance_scores <- function(fname){
+  ret <- read_csv(fname) %>%
+    dplyr::rename(num_predictors = `# of predictors`)
+  col <- colnames(ret)
+  col <- col[[length(col)]]
+  ret <- ret %>%
+    group_by(num_predictors, i, predictors) %>%
+    summarise("mean_{col}" := mean( .data[[col]]  )) %>%
+    ungroup() %>%
+    mutate(mass_prediction = case_when(
+      i == 0 ~ "MASS",
+      i == 1 ~ "entropy",
+      TRUE ~ "random"
+    )) %>%
+    arrange(num_predictors)
+  return(ret)
+}
+```
+
+
+# DATASET 1 (marine)
+## Data Loading
+```{r}
+# read data-- mean f1 for 5-fold CV all RF models using MASS labels
+aggf1RF <- read.csv('MIP_classify_RF_f1_score_agg.csv') %>%
+  mutate(response = factor(response, levels = c("difcoMB", "HMBcmpt", "HMBpep", "HMBaa", 
+                                                "HMBlips", "HMBoligo", "HMBorg", "HMBntrl", 
+                                                "HMBamisug", "HMBacdsug", "HMB--"))) %>%
+  arrange(response)
+colnames(aggf1RF) <- c("num_pred", "response", "f1_mean", "f1_std")
+
+# binary growth profiles
+gp <- readxl::read_xlsx('../Data/growth_profiles_binary.xlsx')
+```
+
+## Figure: Marine dataset main figure
+### Phenotype matrix
+
+```{r}
+gp_ent <- lapply(gp[,-1], entropy) 
+ent <- data.frame(medium = names(gp_ent),
+                  entropy = unlist(gp_ent))
+```
+
+```{r}
+### Figure raw phenotype matrix as heatmap ###
+
+# order rows and columns with hclust
+marine_hm_clust_org <- hclust(dist(column_to_rownames(gp, "strain"), method = "euclidian"), method = "complete")
+marine_hm_clust_cond <- hclust(dist(t(select(gp, -strain)), method = "euclidian"), method = "complete")
+
+marine_hm <- gp %>%
+  pivot_longer(-strain, names_to = "condition", values_to = "phenotype")
+
+fig_marine_hm <- marine_hm %>%
+  mutate(strain = fct_relevel(strain, marine_hm_clust_org$labels[marine_hm_clust_org$order]),
+    condition = fct_relevel(condition, marine_hm_clust_cond$labels[marine_hm_clust_cond$order])) %>%
+  # complete(num_pred, response) %>%
+  # mutate(pred = if_else(is.na(f1_mean), 1, 0)) %>%
+  # group_by(response) %>% mutate(x = sum(pred)) %>% ungroup() %>%
+  # arrange(desc(x)) %>% mutate(response = fct_inorder(response)) %>%
+  # mutate(num_pred = as.factor(num_pred)) %>%
+  ggplot(., aes(x = condition, y = strain)) +
+  geom_tile(aes(fill = as.factor(phenotype)), colour = "gray") +
+  scale_fill_viridis(discrete = TRUE, labels = c("0" = "Negative", "1" = "Positive"), name = "Growth") +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        legend.position = "bottom",
+        axis.title.x = element_blank(), axis.title.y = element_blank())
+fig_marine_hm
+```
+
+```{r}
+marine_hm_cond_var <- marine_hm %>%
+  group_by(condition) %>%
+  summarise(var = var(phenotype)) %>%
+  ungroup() %>%
+  arrange(desc(var)) %>%
+  mutate(rank = fct_reorder(condition, var))
+```
+
+### MASS applied
+```{r warning=FALSE}
+### Figure heatmap selected predictors
+marine_mass_p <- aggf1RF %>%
+  complete(num_pred, response) %>%
+  mutate(pred = if_else(is.na(f1_mean), 1, 0)) %>%
+  group_by(response) %>% mutate(x = sum(pred),
+                                xfirst = suppressWarnings( min(num_pred[pred==1]) )
+                                ) %>% ungroup() %>%
+  arrange(desc(x)) %>% mutate(response = fct_inorder(response))
+
+# ordered by predictor selection prevalence
+fig_marine_mass_p <- marine_mass_p %>%
+  mutate(num_pred = as.factor(num_pred)) %>%
+  ggplot(., aes(x = num_pred, y = response)) +
+  geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
+  labs(x = "Number of Predictors") +
+  scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title.y = element_blank(), axis.text.y = element_blank())
+fig_marine_mass_p + theme_minimal()
+
+# ordered by first p selected as predictor
+fig_marine_mass_p_xfirst <- marine_mass_p %>%
+  arrange(xfirst) %>% mutate(response = fct_inorder(response)) %>%
+  mutate(num_pred = as.factor(num_pred)) %>%
+  ggplot(., aes(x = num_pred, y = response)) +
+  geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
+  labs(x = "Number of Predictors") +
+  scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title.y = element_blank(), axis.text.y = element_blank())
+fig_marine_mass_p_xfirst +
+  (ent %>%
+     mutate(medium = factor(medium, levels = levels((marine_mass_p%>% mutate(response =fct_reorder(response, xfirst)))$response))) %>%
+  ggplot(aes(x = medium, y = entropy, fill = medium)) +
+  geom_col(width = 1) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.y = element_text(hjust = 0.5, colour = "black")) +
+  scale_fill_viridis(discrete = TRUE, direction = -1) +
+  scale_y_continuous(breaks = c(0,.5,1)) +
+  # scale_y_continuous(breaks = seq(0,1,.2)) +
+  guides(fill = "none") +
+  labs(x = "",
+       y = "Shannon Entropy") +
+  coord_flip())
+
+### Figure bar graphs: Entropy
+fig_marine_mass_ent <- ent %>%
+  mutate(medium = factor(medium, levels = levels((marine_mass_p)$response))) %>%
+  ggplot(aes(x = medium, y = entropy, fill = medium)) +
+  geom_col(width = 1) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.y = element_text(hjust = 0.5, colour = "black")) +
+  scale_fill_viridis(discrete = TRUE, direction = -1) +
+  scale_y_continuous(breaks = c(0,.5,1)) +
+  # scale_y_continuous(breaks = seq(0,1,.2)) +
+  guides(fill = "none") +
+  labs(x = "",
+       y = "Shannon Entropy") +
+  coord_flip()
+fig_marine_mass_ent
+fig_marine_mass_p + fig_marine_mass_ent
+
+```
+
+### RF performance
+```{r}
+marine_baseline_stats <- read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-acc.csv") %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-bacc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-f1weighted.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+    mutate(num_predictors = factor(num_predictors, levels = 1:10))
+
+# just MCC
+fig_marine_mass_mcc <- marine_baseline_stats %>%
+  ggplot(., aes(num_predictors, mean_mcc, color = mass_prediction)) +
+  geom_point(aes(shape = mass_prediction, size = mass_prediction), position = position_jitter(width = .2, height = 0), alpha = .6) +
+  stat_summary(aes(group = mass_prediction), geom = 'line', fun = 'mean', linewidth = 1) +
+  scale_color_brewer(palette = "Set1", name = "RF with", labels = c("random" = "random predictors (n=300)", "MASS" = "MASS-selected predictors", "entropy" = "max-entropy-selected predictors")) +
+  scale_shape_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_size_manual(values = c("random" = .4, "MASS" = 2, "entropy" = 2), guide = 'none') +
+  # scale_alpha_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_x_discrete(drop = FALSE) +#, breaks = my_breaks) +
+  labs(#title = "Yeast dataset: RF performance ~ #predictors",
+       x = "# predictors",
+       y = "mean(MCC over\nall RF predictions)") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+fig_marine_mass_mcc
+```
+
+### Plot assembly
+```{r}
+png(filename = "../Results/fig-marine-mass.png", width = 4000, height = 3500, res = 300)
+wrap_plots(A = fig_marine_hm,
+           B = fig_marine_mass_p,
+           C = fig_marine_mass_ent, 
+           D = fig_marine_mass_mcc,
+           design = layout <- '
+ABC
+ADD
+', heights = c(1,1), widths = c(3,3,1)) +
+  plot_annotation(tag_levels = "A") & 
+  theme(plot.tag = element_text(size = 18))
+dev.off()
+```
+
+## Supplementary Figure: all RF performance scores
+```{r}
+png(filename = "../Results/fig-supp-marine-rf_perf_all.png", width = 3500, height = 2000, res = 300)
+fig_marine_rf_perf_all <- marine_baseline_stats %>%
+  pivot_longer(starts_with("mean_"), names_to = "performance_score", values_to = "performance_value") %>%
+  ggplot(., aes(num_predictors, performance_value, color = mass_prediction)) +
+  geom_point(aes(shape = mass_prediction, size = mass_prediction), position = position_jitter(width = .2, height = 0), alpha = .6) +
+  stat_summary(aes(group = mass_prediction), geom = 'line', fun = 'mean', linewidth = 1) +
+  scale_color_brewer(palette = "Set1", name = "RF with", labels = c("random" = "random predictors (n=300)", "MASS" = "MASS-selected predictors", "entropy" = "max-entropy-selected predictors")) +
+  scale_shape_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_size_manual(values = c("random" = .4, "MASS" = 2, "entropy" = 2), guide = 'none') +
+  # scale_alpha_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_x_discrete(drop = FALSE) +
+  labs(title = "Marine dataset: RF performance ~ #predictors",
+       x = "# predictors",
+       # y = "mean(balanced accuracy over all RF predictions)",
+       y = "mean(respect. performance score over all RF predictions)") +
+    facet_wrap(facets = vars(performance_score), ncol = 2) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+fig_marine_rf_perf_all
+dev.off()
+```
+
+## Supplementary Figure: Per-Response plot
+```{r}
+### Figure dot plots: MCC
+marine_mcc_js <- read_csv("../Results/MIP_marine_baseline_20230913_stats-mcc_js.csv") %>%
+    dplyr::rename(num_predictors = `# of predictors`) %>%
+  group_by(num_predictors, i, predictors, response) %>%
+  summarize(mean_mcc = mean(mcc), sd_mcc = sd(mcc)) %>%
+  ungroup() %>%
+  mutate(num_predictors = if_else(num_predictors==11, "C", as.character(num_predictors))) %>% 
+  mutate(num_predictors = factor(num_predictors, levels = c(as.character(1:10), "C"))) %>%
+  mutate(response = factor(response, levels = levels(fct_reorder(marine_mass_p$response, marine_mass_p$x))))
+
+fig_marine_mass_perattr_mcc <- marine_mcc_js %>%
+  ggplot(aes(x = as.factor(num_predictors), y = mean_mcc, color = response)) +
+  geom_point(aes(size = sd_mcc), alpha = .75) +
+  theme_classic() +
+  theme(text = element_text(size = 14),
+        legend.justification=c(1,0), 
+        legend.position=c(1,0)) +
+  scale_color_viridis(discrete = TRUE) +
+  facet_wrap(~response) +
+  guides(color = "none") +
+  labs(y = "mean(MCC over\nall RF predictions)",
+       x = "Number of Predictors",
+       color = "Medium",
+       size = "Standard Deviation")
+png(filename = "../Results/fig-supp-marine-rf_perf_MCC_perResponse.png", width = 3500, height = 2500, res = 300)
+fig_marine_mass_perattr_mcc
+dev.off()
+```
+
+# DATASET 2 (bacdive1)
+## Data Loading
+```{r}
+bacdive1dat <- read_tsv("..Data/20221212-pheno_mat_select_red-builds_acid_from.tsv") %>%
+  pivot_longer(-id, names_to = "response") %>%
+  mutate(response = str_match(response, "MU:(.+)_builds acid from")[,2]) %>%
+  pivot_wider(names_from = "response")
+
+# read in f1 scores
+bacdive1f1 <- read_csv("MIP_classify_RF_f1_score_agg-bacdive1.csv") %>%
+  dplyr::rename(num_predictors = `# of predictors`) %>%
+  mutate(response = str_match(response, "MU:(.+)_builds acid from")[,2]) %>%
+  select(-std) %>% dplyr::rename(f1_score = mean) %>%
+  arrange(num_predictors)
+```
+
+## Figure: BacDive1 dataset main figure
+### Phenotype matrix
+```{r}
+### Figure raw phenotype matrix as heatmap ###
+
+# order rows and columns with hclust
+bacdive1_hm_clust_org <- hclust(dist(column_to_rownames(bacdive1dat, "id"), method = "euclidian"), method = "complete")
+bacdive1_hm_clust_cond <- hclust(dist(t(select(bacdive1dat, -id)), method = "euclidian"), method = "complete")
+bacdive1_hm <- bacdive1dat %>%
+  pivot_longer(-id, names_to = "condition", values_to = "phenotype") %>%
+  mutate(id = fct_relevel(as.character(id), bacdive1_hm_clust_org$labels[bacdive1_hm_clust_org$order]),
+    condition = fct_relevel(condition, bacdive1_hm_clust_cond$labels[bacdive1_hm_clust_cond$order])
+    )
+
+fig_bacdive1_hm <- bacdive1_hm %>%
+  ggplot(., aes(x = condition, y = id)) +
+  geom_tile(aes(fill = as.factor(phenotype))) +
+  scale_fill_viridis_d(labels = c("0" = "Negative", "2" = "Positive"), name = "Fermentation") +
+  labs(y = "Species") +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        legend.text = element_text(size = 10, color = "black"),
+        legend.title = element_text(size = 10, color = "black"),
+        legend.key.size = unit(0.8, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.y = element_line(colour = "black", linewidth = rel(1)))
+fig_bacdive1_hm
+```
+
+
+```{r}
+### Figure heatmap marginal conditions ###
+# percentage of bacdive species fermenting on each carbon source
+fig_bacdive1_hm_cond <- bacdive1_hm %>%
+  ggplot(aes(x = condition, fill = as.factor(phenotype))) +
+  geom_bar(position = "fill", width = 1) +
+  scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title = element_blank(), 
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        axis.text.y = element_text(hjust = 0.5, color = "black")) +
+    #theme(text = element_blank()) +
+  scale_fill_viridis_d(guide = NULL) +
+  guides(fill = "none") +
+  labs(x = "Carbon Source",
+       y = "Percentage of Species")
+fig_bacdive1_hm_cond
+```
+
+```{r}
+### Figure heatmap marginal organisms ###
+# the order of the bars (strains) matches the order of the strains in the heat map
+fig_bacdive1_hm_org <- bacdive1_hm %>%
+  ggplot(aes(x = id, fill = as.factor(phenotype))) +
+  geom_bar(position = "fill", width = 1) +
+  scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks.y = element_blank()) +
+  scale_fill_viridis_d(guide = NULL) +
+  #guides(fill = "none") +
+  labs(x = "Species",
+       y = "Carbon Sources")+
+  coord_flip()
+fig_bacdive1_hm_org
+```
+
+```{r}
+# png(filename = "fig-bacdive1-heatmap.png", width = 4500, height = 3000, res = 300)
+ wrap_plots(A = fig_bacdive1_hm_cond,
+           B = guide_area(), 
+           C = fig_bacdive1_hm,
+           D = fig_bacdive1_hm_org,
+           design = layout <- '
+AB
+CD
+', heights = c(1, 9), widths = c(6,1), guides = 'collect') +
+  plot_annotation(tag_levels = "A") & 
+  theme(plot.tag = element_text(size = 18))
+# dev.off()
+```
+
+### MASS applied
+```{r}
+# format data
+bacdive1f1_wide <- bacdive1f1 %>%
+  pivot_wider(names_from = response, values_from = f1_score)
+# c sources selected as predictors will have NA, change to 0
+bacdive1f1_wide[is.na(bacdive1f1_wide)] <- 1
+# anything w f1 score was a response & all f1 < 1, so convert all < 1 to 0, meaning NOT chosen as predictor
+bacdive1f1_wide[bacdive1f1_wide < 1] <- 0
+```
+
+```{r}
+### Figure fig_bacdive1_mass ###
+# format for heatmap
+bacdive1_mass_p <- bacdive1f1 %>%
+  complete(num_predictors, response) %>%
+  mutate(pred = if_else(is.na(f1_score), 1, 0)) %>%
+  group_by(response) %>% mutate(x = sum(pred),
+                                xfirst = suppressWarnings( min(num_predictors[pred==1]) )
+                                ) %>% ungroup() %>%
+  arrange(desc(x)) %>% mutate(response = fct_inorder(response))
+
+# ordered by predictor selection prevalence
+fig_bacdive1_mass_p <- bacdive1_mass_p %>%
+  mutate(num_predictors = as.factor(num_predictors)) %>%
+  ggplot(., aes(x = num_predictors, y = response)) +
+  geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
+  labs(x = "Number of Predictors") +
+  scale_x_discrete(breaks = my_breaks) +
+  scale_y_discrete(position = "right") +
+  scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title.y = element_blank(), 
+        # axis.text.y = element_blank()
+        )
+fig_bacdive1_mass_p
+
+# subselection on the first 8 p's
+fig_bacdive1_mass_p8 <- bacdive1_mass_p %>%
+  filter(num_predictors<9) %>%
+  group_by(response) %>%
+  filter(sum(pred)>0) %>%
+  mutate(y = min(num_predictors[pred>0])) %>% ungroup() %>%
+  mutate(response = fct_reorder(response, y, .desc = TRUE)) %>%
+  mutate(num_predictors = as.factor(num_predictors)) %>%
+  ggplot(., aes(x = num_predictors, y = response)) +
+  geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
+  labs(x = "Number of Predictors") +
+  scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title.y = element_blank(), 
+        # axis.text.y = element_blank()
+        )
+fig_bacdive1_mass_p8
+
+
+# ordered by first p selected as predictor
+fig_bacdive1_mass_p_xfirst <- bacdive1_mass_p %>%
+  arrange(xfirst) %>% mutate(response = fct_inorder(response)) %>%
+  mutate(num_predictors = as.factor(num_predictors)) %>%
+  ggplot(., aes(x = num_predictors, y = response)) +
+  geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
+  labs(x = "Number of Predictors") +
+  scale_x_discrete(breaks = my_breaks) +
+  scale_y_discrete(position = "right") +
+  scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title.y = element_blank(), axis.text.y = element_blank())
+fig_bacdive1_mass_p_xfirst +
+  (ent %>%
+     mutate(carbon_source = factor(carbon_source, levels = levels((bacdive1_mass_p%>% mutate(response =fct_reorder(response, xfirst)))$response))) %>%
+  ggplot(aes(x = carbon_source, y = entropy, fill = carbon_source)) +
+  geom_col(width = 1) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.y = element_text(hjust = 0.5, colour = "black")) +
+  scale_fill_viridis(discrete = TRUE, direction = -1) +
+  scale_y_continuous(breaks = c(0,.5,1)) +
+  # scale_y_continuous(breaks = seq(0,1,.2)) +
+  guides(fill = "none") +
+  labs(x = "",
+       y = "Shannon Entropy") +
+  coord_flip())
+```
+
+```{r}
+# compute entropy
+e <- lapply(select(bacdive1dat, -id), entropy) 
+# format data
+# match order to heatmap of c sources selected as predictors
+ent <- tibble(carbon_source = names(e),
+                  entropy = unlist(e)) %>%
+  mutate(carbon_source = factor(carbon_source, levels(bacdive1_mass_p$response)))
+```
+
+```{r}
+### Figure bar graphs: Entropy ###
+fig_bacdive1_mass_ent <- ent %>%
+  ggplot(aes(x = carbon_source, y = as.numeric(entropy), fill = carbon_source)) +
+  geom_col(width = 1) +
+  scale_fill_viridis_d(direction = -1) +
+  scale_y_continuous(breaks = c(0,.5,1)) +
+  guides(fill = "none") +
+  labs(x = "",
+       y = "Shannon Entropy") +
+  coord_flip() +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.y = element_blank()
+        # axis.text.y = element_text(hjust = 0.5, colour = "black")
+        )
+fig_bacdive1_mass_ent
+
+fig_bacdive1_mass_p + fig_bacdive1_mass_ent
+```
+
+### RF Performance
+```{r}
+bacdive1_baseline_stats <- read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-acc.csv") %>%
+  left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-bacc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-f1weighted.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+    mutate(num_predictors = factor(num_predictors, levels = 1:45))
+
+# just MCC
+fig_bacdive1_mass_mcc <- bacdive1_baseline_stats %>%
+  ggplot(., aes(num_predictors, mean_mcc, color = mass_prediction)) +
+  geom_point(aes(shape = mass_prediction, size = mass_prediction), position = position_jitter(width = .2, height = 0), alpha = .6) +
+  stat_summary(aes(group = mass_prediction), geom = 'line', fun = 'mean', linewidth = 1) +
+  scale_color_brewer(palette = "Set1", name = "RF with", labels = c("random" = "random predictors (n<=300)", "MASS" = "MASS-selected predictors", "entropy" = "max-entropy-selected predictors")) +
+  scale_shape_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_size_manual(values = c("random" = .4, "MASS" = 2, "entropy" = 2), guide = 'none') +
+  # scale_alpha_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_x_discrete(drop = FALSE, breaks = my_breaks) +
+  labs(#title = "Bacdive1 dataset: RF performance ~ #predictors",
+       x = "# predictors",
+       y = "mean(MCC over\nall RF predictions)") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+fig_bacdive1_mass_mcc
+```
+
+
+### Plot assembly
+```{r}
+# png(filename = "fig-bacdive1-mass.png", width = 5500, height = 5500, res = 300)
+pdf(file = "../Results/fig-bacdive1-mass.pdf", width = 20, height = 22)
+wrap_plots(A = fig_bacdive1_hm_cond,
+           B = guide_area(), 
+           C = fig_bacdive1_hm,
+           D = fig_bacdive1_hm_org,
+           E = fig_bacdive1_mass_p,
+           F = fig_bacdive1_mass_ent,
+           G = (fig_bacdive1_mass_mcc + theme(axis.title.x = element_text(vjust = 35)) + plot_layout(guides = 'keep')),
+           H = (fig_bacdive1_mass_p8 + scale_y_discrete(position = "right") + ggtitle(label = "Fermented Carbon Source")),
+           I = grid::textGrob("Relevant Carbohydrate Monomers"),
+           J = grid::textGrob("momomers influx metabolic map"),
+           design = '
+AAAABEEEEF
+CCCCDEEEEF
+CCCCDEEEEF
+CCCCDEEEEF
+CCCCDEEEEF
+CCCCDGGGGG
+CCCCDGGGGG
+CCCCDGGGGG
+CCCCDGGGGG
+CCCCDGGGGG
+HHIIIJJJJJ
+HHIIIJJJJJ
+HHIIIJJJJJ
+', guides = 'collect') +
+  plot_annotation(tag_levels = list(c("A", "", "", "B", "C", "D", "E", "F", "G"))) & 
+  theme(plot.tag = element_text(size = 18))
+dev.off()
+```
+
+## Supplementary Figure: all RF performance scores
+```{r}
+png(filename = "../Results/fig-supp-bacdive1-rf_perf_all.png", width = 3500, height = 2000, res = 300)
+fig_bacdive1_rf_perf_all <- bacdive1_baseline_stats %>%
+  pivot_longer(starts_with("mean_"), names_to = "performance_score", values_to = "performance_value") %>%
+  ggplot(., aes(num_predictors, performance_value, color = mass_prediction)) +
+  geom_point(aes(shape = mass_prediction, size = mass_prediction), position = position_jitter(width = .2, height = 0), alpha = .6) +
+  stat_summary(aes(group = mass_prediction), geom = 'line', fun = 'mean', linewidth = 1) +
+  # scale_color_discrete(name = "RF with", labels = c("random" = "random predictors (n=300)", "MASS" = "MASS-selected predictors", "entropy" = "max-entropy-selected predictors")) +
+  scale_color_brewer(palette = "Set1", name = "RF with", labels = c("random" = "random predictors (n=300)", "MASS" = "MASS-selected predictors", "entropy" = "max-entropy-selected predictors")) +
+  scale_shape_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_size_manual(values = c("random" = .4, "MASS" = 2, "entropy" = 2), guide = 'none') +
+  # scale_alpha_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_x_discrete(drop = FALSE, breaks = ~my_breaks(.x, 2)) +
+  labs(title = "Bacdive1 dataset: RF performance ~ #predictors",
+       x = "# predictors",
+       # y = "mean(balanced accuracy over all RF predictions)",
+       y = "mean(respective performance score over all RF predictions)") +
+  facet_wrap(facets = vars(performance_score), ncol = 2) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+fig_bacdive1_rf_perf_all
+dev.off()
+```
+
+
+# DATASET 3 (yeast)
+## Data Loading
+```{r}
+### import and format yeast data ###
+rawDat <- readxl::read_xlsx("../Data/summary_2ndEdition.xlsx", sheet = "Sheet1", trim_ws = TRUE) %>% 
+  filter(!strain == "dummyVars") %>% # second row has the dummy vars, remove
+  rename(species = strain)
+
+# get list of carbon sources included in analysis
+cSources <- readxl::read_xlsx("../Data/summary_2ndEdition.xlsx", sheet = "Sheet2", trim_ws = TRUE) 
+# subset features
+rawDat <- rawDat %>% select(c(cSources$carbon_source, "species"))
+# remove the word "growth" from column names
+rawDat <- rawDat %>%
+  setNames(gsub(" growth", "", names(.)))
+
+# replace characters with numbers, see above
+yeastdat <- rawDat %>%
+  mutate(across(everything(), ~replace(., . %in%  c("D", "V", "W") , 1))) %>%
+  mutate(across(everything(), ~replace(., . == "+", 2))) %>%
+  mutate(across(everything(), ~replace(., . == "-", 0))) %>%
+  mutate(across(everything(), ~replace(., . == "?", NA)))
+
+# remove rows with unknown feature values (NAs) and no variance
+yeastdat <- yeastdat %>%
+  drop_na()
+
+# read MASS result
+yeast_mass_p <- read_csv('../Results/MIP_classify_z_all76_greedy2.csv') %>%
+  rownames_to_column("num_responses") %>%
+  mutate(num_responses = as.numeric(num_responses),
+    num_predictors = max(num_responses)-num_responses+1) %>%
+  select(-num_responses) %>%
+  pivot_longer(-num_predictors, names_sep = '_', names_to = c('response', 'x'), values_to = c('pred')) %>%
+ # mutate(pred = if_else(resp==0, 1, 0)) %>%
+  filter(x == '2.0') %>% select(-x) %>% # '_1.0' and '2.0' columns contain the same values
+  filter(response != 'D-Glucose', num_predictors<35) %>% # filter out unused variables
+  group_by(response) %>% mutate(x = sum(pred)) %>% ungroup() %>%
+  arrange(desc(x)) %>% mutate(response = fct_inorder(response))
+```
+
+
+## Figure: Yeast dataset main figure
+### Phenotype matrix
+
+```{r}
+### Figure raw phenotype matrix as heatmap ###
+
+# order rows and columns with hclust
+yeast_hm_clust_org <- hclust(dist(column_to_rownames(yeastdat, "species"), method = "euclidian"), method = "complete")
+yeast_hm_clust_cond <- hclust(dist(t(select(yeastdat, -species)), method = "euclidian"), method = "complete")
+yeast_hm <- yeastdat %>%
+  pivot_longer(-species, names_to = "condition", values_to = "phenotype") %>%
+  mutate(species = fct_relevel(as.character(species), yeast_hm_clust_org$labels[yeast_hm_clust_org$order]),
+    condition = fct_relevel(condition, yeast_hm_clust_cond$labels[yeast_hm_clust_cond$order])
+    )
+
+fig_yeast_hm <- yeast_hm %>%
+  ggplot(., aes(x = condition, y = species)) +
+  geom_tile(aes(fill = as.factor(phenotype))) +
+  scale_fill_viridis_d(labels = c("0" = "Negative", "1" = "Variable, weak,\n delayed", "2" = "Positive"), name = "Growth") +
+  labs(y = "Species") +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        legend.text = element_text(size = 10, color = "black"),
+        legend.title = element_text(size = 10, color = "black"),
+        legend.key.size = unit(0.8, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.y = element_line(colour = "black", linewidth = rel(1)))
+fig_yeast_hm
+```
+
+
+```{r}
+### Figure heatmap marginal conditions ###
+# percentage of bacdive species fermenting on each carbon source
+fig_yeast_hm_cond <- yeast_hm %>%
+  ggplot(aes(x = condition, fill = as.factor(phenotype))) +
+  geom_bar(position = "fill", width = 1) +
+  scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title = element_blank(), 
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        axis.text.y = element_text(hjust = 0.5, color = "black")) +
+  scale_fill_viridis_d(guide = NULL) +
+  guides(fill = "none") +
+  labs(x = "Carbon Source",
+       y = "Percentage of Species")
+fig_yeast_hm_cond
+```
+
+```{r}
+### Figure heatmap marginal organisms ###
+# the order of the bars (strains) matches the order of the species in the heat map
+fig_yeast_hm_org <- yeast_hm %>%
+  ggplot(aes(x = species, fill = as.factor(phenotype))) +
+  geom_bar(position = "fill", width = 1) +
+  scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks.y = element_blank()) +
+  scale_fill_viridis_d(guide = NULL) +
+  #guides(fill = "none") +
+  labs(x = "Species",
+       y = "Carbon Sources") +
+  coord_flip()
+fig_yeast_hm_org
+```
+
+```{r}
+# png(filename = "fig-bacdive1-heatmap.png", width = 4500, height = 3000, res = 300)
+ wrap_plots(A = fig_yeast_hm_cond,
+           B = guide_area(), 
+           C = fig_yeast_hm,
+           D = fig_yeast_hm_org,
+           design = layout <- '
+AB
+CD
+', heights = c(1, 9), widths = c(6,1), guides = 'collect') +
+  plot_annotation(tag_levels = "A") & 
+  theme(plot.tag = element_text(size = 18))
+# dev.off()
+```
+
+### MASS applied
+```{r}
+### Figure fig_yeast_mass ###
+fig_yeast_mass_p <- yeast_mass_p %>%
+  mutate(num_predictors = as.factor(num_predictors)) %>%
+  ggplot(., aes(x = num_predictors, y = response)) +
+  geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
+  labs(x = "Number of Predictors") +
+  scale_x_discrete(breaks = my_breaks) +
+  scale_y_discrete(position = "right") +
+  scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 14, color = "black"),
+        axis.title.y = element_blank(), 
+        axis.text.y.right = element_text(hjust = .5)
+        )
+fig_yeast_mass_p
+```
+
+
+```{r}
+# compute entropy
+e <- lapply(select(yeastdat, -species), entropy) 
+# format data
+# match order to heatmap of c sources selected as predictors
+ent <- tibble(carbon_source = names(e),
+                  entropy = unlist(e)) %>%
+  filter(carbon_source != "D-Glucose") %>%
+  mutate(carbon_source = factor(carbon_source, levels(yeast_mass_p$response)))
+```
+
+```{r}
+### Figure bar graphs: Entropy ###
+fig_yeast_mass_ent <- ent %>%
+  ggplot(aes(x = carbon_source, y = as.numeric(entropy), fill = carbon_source)) +
+  geom_col(width = 1) +
+  scale_fill_viridis_d(direction = -1) +
+  scale_y_continuous(breaks = c(0,.5,1)) +
+  guides(fill = "none") +
+  labs(x = "",
+       y = "Shannon Entropy") +
+  coord_flip() +
+  theme_classic() +
+  theme(text = element_text(size = 14, color = "black"),
+        # axis.text.y = element_text(hjust = 0.5, colour = "black"),
+        axis.text.y = element_blank()
+        )
+fig_yeast_mass_ent
+```
+
+### RF performance
+```{r}
+yeast_baseline_stats <- read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-acc.csv") %>%
+  left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-bacc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-f1weighted.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+    mutate(num_predictors = factor(num_predictors, levels = 1:36))
+
+# just MCC
+fig_yeast_mass_mcc <- yeast_baseline_stats %>%
+  ggplot(., aes(num_predictors, mean_mcc, color = mass_prediction)) +
+  geom_point(aes(shape = mass_prediction, size = mass_prediction), position = position_jitter(width = .2, height = 0), alpha = .6) +
+  stat_summary(aes(group = mass_prediction), geom = 'line', fun = 'mean', linewidth = 1) +
+  scale_color_brewer(palette = "Set1", name = "RF with", labels = c("random" = "random predictors (n=300)", "MASS" = "MASS-selected predictors", "entropy" = "max-entropy-selected predictors")) +
+  scale_shape_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_size_manual(values = c("random" = .4, "MASS" = 2, "entropy" = 2), guide = 'none') +
+  # scale_alpha_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_x_discrete(breaks = my_breaks) +
+  labs(#title = "Yeast dataset: RF performance ~ #predictors",
+       x = "# predictors",
+       y = "mean(MCC over\nall RF predictions)") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+fig_yeast_mass_mcc
+```
+
+### Plot assembly
+```{r}
+# plot assembly
+png(filename = "../Results/fig-yeast-mass.png", width = 5500, height = 4300, res = 300)
+wrap_plots(A = fig_yeast_hm_cond,
+           B = guide_area(), 
+           C = fig_yeast_hm,
+           D = fig_yeast_hm_org,
+           E = fig_yeast_mass_p,
+           F = fig_yeast_mass_ent,
+           G = (fig_yeast_mass_mcc + theme(axis.title.x = element_text(vjust = 25)) + plot_layout(guides = 'keep')),
+           design = '
+AAAABEEEEF
+CCCCDEEEEF
+CCCCDEEEEF
+CCCCDEEEEF
+CCCCDEEEEF
+CCCCDGGGGG
+CCCCDGGGGG
+CCCCDGGGGG
+CCCCDGGGGG
+CCCCDGGGGG
+', guides = 'collect') +
+  plot_annotation(tag_levels = list(c("A", "", "", "B", "C", "D", "E"))) & 
+  theme(plot.tag = element_text(size = 18))
+dev.off()
+```
+
+
+## Supplementary Figure: all RF performance scores
+```{r}
+png(filename = "../Results/fig-supp-yeast-rf_perf_all.png", width = 3500, height = 2000, res = 300)
+fig_yeast_rf_perf_all <- yeast_baseline_stats %>%
+  pivot_longer(starts_with("mean_"), names_to = "performance_score", values_to = "performance_value") %>%
+  ggplot(., aes(num_predictors, performance_value, color = mass_prediction)) +
+  geom_point(aes(shape = mass_prediction, size = mass_prediction), position = position_jitter(width = .2, height = 0), alpha = .6) +
+  stat_summary(aes(group = mass_prediction), geom = 'line', fun = 'mean', linewidth = 1) +
+  scale_color_brewer(palette = "Set1", name = "RF with", labels = c("random" = "random predictors (n=300)", "MASS" = "MASS-selected predictors", "entropy" = "max-entropy-selected predictors")) +
+  scale_shape_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_size_manual(values = c("random" = .4, "MASS" = 2, "entropy" = 2), guide = 'none') +
+  # scale_alpha_manual(values = c("random" = 1, "MASS" = 16, "entropy" = 16), guide = 'none') +
+  scale_x_discrete(drop = FALSE, breaks = my_breaks) +
+  labs(title = "Yeast dataset: RF performance ~ #predictors",
+       x = "# predictors",
+       # y = "mean(balanced accuracy over all RF predictions)",
+       y = "mean(respect. performance score over all RF predictions)") +
+    facet_wrap(facets = vars(performance_score), ncol = 2) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+fig_yeast_rf_perf_all
+dev.off()
+```
+# Supplementary Figure: Predictor selection frequency vs. Shannon Entropy (all DATASETs)
+```{r}
+# DATASET 1
+marine_nsel <- marine_mass_p %>% group_by(response) %>% summarize(nsel = sum(pred))
+marine_ent <- gp %>% pivot_longer(-strain, names_to = 'medium', values_to = 'growth') %>%
+  group_by(medium) %>%
+  summarize(entropy = entropy(growth))
+# DATASET 2
+bacdive1_nsel <- bacdive1_mass_p %>% group_by(response) %>% summarize(nsel = sum(pred))
+bacdive1_ent <- bacdive1dat %>% pivot_longer(-id, names_to = 'medium', values_to = 'growth') %>%
+  group_by(medium) %>%
+  summarize(entropy = entropy(growth))
+# DATASET 3
+yeast_nsel <- yeast_mass_p %>% group_by(response) %>% summarize(nsel = sum(pred))
+yeast_ent <- yeastdat %>% pivot_longer(-species, names_to = 'medium', values_to = 'growth') %>%
+  group_by(medium) %>%
+  summarize(entropy = entropy(growth))
+
+# assembling everything together
+all_nsel_ent <- bind_rows(
+    left_join(marine_nsel, marine_ent, by = c('response' = 'medium')) %>% mutate(dataset = 'marine'),
+    left_join(bacdive1_nsel, bacdive1_ent, by = c('response' = 'medium')) %>% mutate(dataset = 'bacdive1'),
+    left_join(yeast_nsel, yeast_ent, by = c('response' = 'medium'))  %>% mutate(dataset = 'yeast'))
+
+plot_nsel_ent <- function(ds){
+  p <- ggplot(ds, aes(x = entropy, y = nsel)) +
+  geom_point() +
+  stat_cor(method = "pearson") +
+  scale_y_continuous(breaks = scales::pretty_breaks(10)) +
+  theme_classic() +
+  theme(text = element_text(size = 14)) +
+  labs(y = "Times Selected as Predictor",
+       x = "Shannon Entropy")
+  return(p)
+}
+
+filter(all_nsel_ent, dataset == 'marine') %>% plot_nsel_ent() /
+filter(all_nsel_ent, dataset == 'bacdive1') %>% plot_nsel_ent() 
+
+# plot assembly
+png(filename = "../Results/fig-supp-all-nsel_ent.png", width = 4000, height = 3500, res = 300)
+wrap_plots(A = filter(all_nsel_ent, dataset == 'marine') %>% plot_nsel_ent(),
+           B = filter(all_nsel_ent, dataset == 'bacdive1') %>% plot_nsel_ent(), 
+           C = filter(all_nsel_ent, dataset == 'yeast') %>% plot_nsel_ent(),
+           D = plot_spacer(),
+           E = plot_spacer(),
+           design = '
+AABB
+AABB
+DCCE
+DCCE
+', guides = 'collect') +
+  plot_annotation(tag_levels = 'A') & 
+  theme(plot.tag = element_text(size = 18))
+dev.off()
+```
+
+# Session Info
+```{r}
+sessionInfo()
+```

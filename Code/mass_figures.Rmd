@@ -66,13 +66,15 @@ read_performance_scores <- function(fname){
 # DATASET 1 (marine)
 ## Data Loading
 ```{r}
-# read data-- mean f1 for 5-fold CV all RF models using MASS labels
-aggf1RF <- read.csv('MIP_classify_RF_f1_score_agg.csv') %>%
-  mutate(response = factor(response, levels = c("difcoMB", "HMBcmpt", "HMBpep", "HMBaa", 
-                                                "HMBlips", "HMBoligo", "HMBorg", "HMBntrl", 
-                                                "HMBamisug", "HMBacdsug", "HMB--"))) %>%
-  arrange(response)
-colnames(aggf1RF) <- c("num_pred", "response", "f1_mean", "f1_std")
+# read MASS result
+marine_mass_p <- read_csv('../Results/MIP_classify_z_all_11.csv') %>%
+  rownames_to_column("num_responses") %>%
+  mutate(num_responses = as.numeric(num_responses),
+    num_predictors = max(num_responses)-num_responses+1) %>%
+  select(-num_responses) %>%
+  pivot_longer(-num_predictors, names_to = 'response', values_to = c('pred')) %>%
+  group_by(response) %>% mutate(x = sum(pred)) %>% ungroup() %>%
+  arrange(desc(x)) %>% mutate(response = fct_inorder(response))
 
 # binary growth profiles
 gp <- readxl::read_xlsx('../Data/growth_profiles_binary.xlsx')
@@ -100,11 +102,6 @@ marine_hm <- gp %>%
 fig_marine_hm <- marine_hm %>%
   mutate(strain = fct_relevel(strain, marine_hm_clust_org$labels[marine_hm_clust_org$order]),
     condition = fct_relevel(condition, marine_hm_clust_cond$labels[marine_hm_clust_cond$order])) %>%
-  # complete(num_pred, response) %>%
-  # mutate(pred = if_else(is.na(f1_mean), 1, 0)) %>%
-  # group_by(response) %>% mutate(x = sum(pred)) %>% ungroup() %>%
-  # arrange(desc(x)) %>% mutate(response = fct_inorder(response)) %>%
-  # mutate(num_pred = as.factor(num_pred)) %>%
   ggplot(., aes(x = condition, y = strain)) +
   geom_tile(aes(fill = as.factor(phenotype)), colour = "gray") +
   scale_fill_viridis(discrete = TRUE, labels = c("0" = "Negative", "1" = "Positive"), name = "Growth") +
@@ -128,18 +125,10 @@ marine_hm_cond_var <- marine_hm %>%
 ### MASS applied
 ```{r warning=FALSE}
 ### Figure heatmap selected predictors
-marine_mass_p <- aggf1RF %>%
-  complete(num_pred, response) %>%
-  mutate(pred = if_else(is.na(f1_mean), 1, 0)) %>%
-  group_by(response) %>% mutate(x = sum(pred),
-                                xfirst = suppressWarnings( min(num_pred[pred==1]) )
-                                ) %>% ungroup() %>%
-  arrange(desc(x)) %>% mutate(response = fct_inorder(response))
-
 # ordered by predictor selection prevalence
 fig_marine_mass_p <- marine_mass_p %>%
-  mutate(num_pred = as.factor(num_pred)) %>%
-  ggplot(., aes(x = num_pred, y = response)) +
+  mutate(num_predictors = as.factor(num_predictors)) %>%
+  ggplot(., aes(x = num_predictors, y = response)) +
   geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
   labs(x = "Number of Predictors") +
   scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
@@ -147,33 +136,6 @@ fig_marine_mass_p <- marine_mass_p %>%
   theme(text = element_text(size = 14, color = "black"),
         axis.title.y = element_blank(), axis.text.y = element_blank())
 fig_marine_mass_p + theme_minimal()
-
-# ordered by first p selected as predictor
-fig_marine_mass_p_xfirst <- marine_mass_p %>%
-  arrange(xfirst) %>% mutate(response = fct_inorder(response)) %>%
-  mutate(num_pred = as.factor(num_pred)) %>%
-  ggplot(., aes(x = num_pred, y = response)) +
-  geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
-  labs(x = "Number of Predictors") +
-  scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
-  theme_minimal() +
-  theme(text = element_text(size = 14, color = "black"),
-        axis.title.y = element_blank(), axis.text.y = element_blank())
-fig_marine_mass_p_xfirst +
-  (ent %>%
-     mutate(medium = factor(medium, levels = levels((marine_mass_p%>% mutate(response =fct_reorder(response, xfirst)))$response))) %>%
-  ggplot(aes(x = medium, y = entropy, fill = medium)) +
-  geom_col(width = 1) +
-  theme_classic() +
-  theme(text = element_text(size = 14, color = "black"),
-        axis.text.y = element_text(hjust = 0.5, colour = "black")) +
-  scale_fill_viridis(discrete = TRUE, direction = -1) +
-  scale_y_continuous(breaks = c(0,.5,1)) +
-  # scale_y_continuous(breaks = seq(0,1,.2)) +
-  guides(fill = "none") +
-  labs(x = "",
-       y = "Shannon Entropy") +
-  coord_flip())
 
 ### Figure bar graphs: Entropy
 fig_marine_mass_ent <- ent %>%
@@ -192,17 +154,16 @@ fig_marine_mass_ent <- ent %>%
   coord_flip()
 fig_marine_mass_ent
 fig_marine_mass_p + fig_marine_mass_ent
-
 ```
 
 ### RF performance
 ```{r}
-marine_baseline_stats <- read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-acc.csv") %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-bacc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-f1weighted.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230905_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+marine_baseline_stats <- read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-acc.csv") %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-bacc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-f1weighted.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
     mutate(num_predictors = factor(num_predictors, levels = 1:10))
 
 # just MCC
@@ -285,7 +246,7 @@ fig_marine_mass_perattr_mcc <- marine_mcc_js %>%
   scale_color_viridis(discrete = TRUE) +
   facet_wrap(~response) +
   guides(color = "none") +
-  labs(y = "mean(MCC over\nall RF predictions)",
+  labs(y = "MCC",
        x = "Number of Predictors",
        color = "Medium",
        size = "Standard Deviation")
@@ -297,13 +258,13 @@ dev.off()
 # DATASET 2 (bacdive1)
 ## Data Loading
 ```{r}
-bacdive1dat <- read_tsv("..Data/20221212-pheno_mat_select_red-builds_acid_from.tsv") %>%
+bacdive1dat <- read_tsv("../Data/20221212-pheno_mat_select_red-builds_acid_from.tsv") %>%
   pivot_longer(-id, names_to = "response") %>%
   mutate(response = str_match(response, "MU:(.+)_builds acid from")[,2]) %>%
   pivot_wider(names_from = "response")
 
 # read in f1 scores
-bacdive1f1 <- read_csv("MIP_classify_RF_f1_score_agg-bacdive1.csv") %>%
+bacdive1f1 <- read_csv("../Data/MIP_classify_RF_f1_score_agg-bacdive1.csv") %>%
   dplyr::rename(num_predictors = `# of predictors`) %>%
   mutate(response = str_match(response, "MU:(.+)_builds acid from")[,2]) %>%
   select(-std) %>% dplyr::rename(f1_score = mean) %>%

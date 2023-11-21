@@ -1,25 +1,24 @@
-# MASS
-Prediction of representative phenotypes using Multi-Attribute Subset Selection.
+# Prediction of representative phenotypes using Multi-Attribute Subset Selection (MASS)
 
 ## Content
  - DATASET 1: marine
      - MASS: _MISSING_ (jupyter notebook)
-     - RF: _MISSING_ (jupyter notebook)
+     - RF: [RF_evalutation_w_baseline-marine.ipynb](./Code/RF_evalutation_w_baseline-marine.ipynb) (jupyter notebook)
  - DATASET 2: fermentation (BacDive1)
      - data download and preparation: [download_bacdive_traits.Rmd](./Code/download_bacdive_traits.Rmd) (Rmarkdown notebook)
      - MASS: _MISSING_ (jupyter notebook)
-     - RF: _MISSING_ (jupyter notebook)
+     - RF: [RF_evalutation_w_baseline-bacdive1.ipynb](./Code/RF_evalutation_w_baseline-bacdive1.ipynb) (jupyter notebook)
  - DATASET 3: yeast species
      - MASS: _MISSING_ (jupyter notebook)
-     - RF: _MISSING_ (jupyter notebook)
+     - RF: [RF_evalutation_w_baseline-yeast.ipynb](./Code/RF_evalutation_w_baseline-yeast.ipynb) (jupyter notebook)
  - manuscript figures: [mass_figures.Rmd](./Code/mass_figures.Rmd)  (Rmarkdown notebook)
  
 ## TODO 
- - [ ] move RF notebooks
- - [ ] clean-up paths in RF notebooks
-     - [ ] DS1
-     - [ ] DS2
-     - [ ] DS3
+ - [x] move RF notebooks
+ - [x] clean-up paths in RF notebooks
+     - [x] DS1
+     - [x] DS2
+     - [x] DS3
  - [ ] MASS notebooks?
  - [ ] update readme (abstract, usage etc.)
 

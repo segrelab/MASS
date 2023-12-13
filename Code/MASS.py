@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
 """
 Prediction of representative phenotypes using multi-output subset selection
-Author: wty@bu.edu
+Author: wty@bu.edu; with minor clean-ups by Konrad Herbst, herbstk@bu.edu
 If you find it useful, please cite our paper as follows:
+@article{forchielli2022prediction,
+  title={Prediction of representative phenotypes using multi-output subset selection},
+  author={Forchielli, Elena and Wang, Taiyao and Thommes, Meghan and Paschalidis, Ioannis Ch and Segre, Daniel},
+  journal={bioRxiv},
+  year={2022},
+  publisher={Cold Spring Harbor Laboratory}
+}
 @phdthesis{wang2020data,
   title={Data analytics and optimization methods in biomedical systems: from microbes to humans},
   author={Wang, Taiyao},
   year={2020}
 }
-In the python code, I use microF1 as metrics for RF/LR. One interesting fact: the micro average for binary classification (not for >=3 classes) is equal for Precision, Recall and F1 score 
-     because micro averaging these metrics results in overall Accuracy.
 """
 
 import numpy as np
@@ -108,7 +113,7 @@ def MASS(X, r, z_start=None, z_greedy=None, n_greedy=None,
     return bestB, bestb0, bestz, bestKSI, m.getObjective().getValue(), m
 
 def get_score(df_z_all, f1_micro_all, names_y_all, col_score='f1_score', clf='classify_RF'):
-    output = f'../result/MIP_{clf}_{col_score}.csv'
+    output = f'../Results/MIP_{clf}_{col_score}.csv'
     f1_scores = []
     for i in range(len(f1_micro_all)):
         for nam, j in zip(names_y_all[i], f1_micro_all[i]):

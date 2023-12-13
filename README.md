@@ -19,7 +19,11 @@
      - [x] DS1
      - [x] DS2
      - [x] DS3
- - [ ] MASS notebooks?
+ - [ ] MASS notebooks
+     - [ ] DS1
+     - [ ] DS2
+     - [ ] DS3
+  - [ ] clean-up repo (delete?? GIT_milp_multiclass_11_65.py , MIP_classify_RF_f1_score_agg.csv, compare_classify_RF_f1_score_ag, MIP_classify_f1_scores_greedy2_2,MIP_classify_z_all76_greedy2.csv )
  - [ ] update readme (abstract, usage etc.)
 
 ## Citation

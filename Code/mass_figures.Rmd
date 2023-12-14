@@ -106,7 +106,7 @@ fig_marine_hm <- marine_hm %>%
   geom_tile(aes(fill = as.factor(phenotype)), colour = "gray") +
   scale_fill_viridis(discrete = TRUE, labels = c("0" = "Negative", "1" = "Positive"), name = "Growth") +
   theme_minimal() +
-  theme(text = element_text(size = 14, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
         legend.position = "bottom",
         axis.title.x = element_blank(), axis.title.y = element_blank())
@@ -130,12 +130,13 @@ fig_marine_mass_p <- marine_mass_p %>%
   mutate(num_predictors = as.factor(num_predictors)) %>%
   ggplot(., aes(x = num_predictors, y = response)) +
   geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
-  labs(x = "Number of Predictors") +
+  labs(x = "Number of Predictors", y = "Carbon Source") +
+  scale_y_discrete(guide = guide_axis(position = "right")) +
   scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
   theme_minimal() +
-  theme(text = element_text(size = 14, color = "black"),
-        axis.title.y = element_blank(), axis.text.y = element_blank())
-fig_marine_mass_p + theme_minimal()
+  theme(text = element_text(size = 16, color = "black"),
+        axis.text.y.right = element_text(hjust = .5))
+fig_marine_mass_p
 
 ### Figure bar graphs: Entropy
 fig_marine_mass_ent <- ent %>%
@@ -151,6 +152,7 @@ fig_marine_mass_ent <- ent %>%
   guides(fill = "none") +
   labs(x = "",
        y = "Shannon Entropy") +
+  theme(axis.text.y = element_blank()) +
   coord_flip()
 fig_marine_mass_ent
 fig_marine_mass_p + fig_marine_mass_ent
@@ -158,12 +160,12 @@ fig_marine_mass_p + fig_marine_mass_ent
 
 ### RF performance
 ```{r}
-marine_baseline_stats <- read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-acc.csv") %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-bacc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-f1weighted.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20230913_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+marine_baseline_stats <- read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-acc.csv") %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-bacc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-f1weighted.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
+  left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
     mutate(num_predictors = factor(num_predictors, levels = 1:10))
 
 # just MCC
@@ -180,29 +182,30 @@ fig_marine_mass_mcc <- marine_baseline_stats %>%
        x = "# predictors",
        y = "mean(MCC over\nall RF predictions)") +
   theme_classic() +
-  theme(legend.position = "bottom")
+  theme(text = element_text(size = 16, color = "black"), legend.position = "bottom")
 fig_marine_mass_mcc
 ```
 
 ### Plot assembly
 ```{r}
-png(filename = "../Results/fig-marine-mass.png", width = 4000, height = 3500, res = 300)
+# png(filename = "../Results/fig-marine-mass.png", width = 4000, height = 3500, res = 300)
+pdf(file = "../Results/fig-marine-mass.pdf", width = 20, height = 16)
 wrap_plots(A = fig_marine_hm,
            B = fig_marine_mass_p,
            C = fig_marine_mass_ent, 
-           D = fig_marine_mass_mcc,
+           D = fig_marine_mass_mcc + theme(axis.title.x = element_text(vjust = 14)),
            design = layout <- '
 ABC
 ADD
 ', heights = c(1,1), widths = c(3,3,1)) +
   plot_annotation(tag_levels = "A") & 
-  theme(plot.tag = element_text(size = 18))
+  theme(plot.tag = element_text(size = 18), axis.text = element_text(size = 16))
 dev.off()
 ```
 
 ## Supplementary Figure: all RF performance scores
 ```{r}
-png(filename = "../Results/fig-supp-marine-rf_perf_all.png", width = 3500, height = 2000, res = 300)
+png(filename = "../Results/fig-supp-marine-rf_perf_all.png", width = 3500, height = 3000, res = 300)
 fig_marine_rf_perf_all <- marine_baseline_stats %>%
   pivot_longer(starts_with("mean_"), names_to = "performance_score", values_to = "performance_value") %>%
   ggplot(., aes(num_predictors, performance_value, color = mass_prediction)) +
@@ -218,7 +221,7 @@ fig_marine_rf_perf_all <- marine_baseline_stats %>%
        # y = "mean(balanced accuracy over all RF predictions)",
        y = "mean(respect. performance score over all RF predictions)") +
     facet_wrap(facets = vars(performance_score), ncol = 2) +
-  theme_classic() +
+  theme_classic(base_size = 14) +
   theme(legend.position = "bottom")
 fig_marine_rf_perf_all
 dev.off()
@@ -291,9 +294,9 @@ fig_bacdive1_hm <- bacdive1_hm %>%
   scale_fill_viridis_d(labels = c("0" = "Negative", "2" = "Positive"), name = "Fermentation") +
   labs(y = "Species") +
   theme_minimal() +
-  theme(text = element_text(size = 14, color = "black"),
-        legend.text = element_text(size = 10, color = "black"),
-        legend.title = element_text(size = 10, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
+        legend.text = element_text(size = 14, color = "black"),
+        legend.title = element_text(size = 16, color = "black"),
         legend.key.size = unit(0.8, "lines"),
         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
         axis.text.y = element_blank(),
@@ -311,7 +314,7 @@ fig_bacdive1_hm_cond <- bacdive1_hm %>%
   geom_bar(position = "fill", width = 1) +
   scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
   theme_classic() +
-  theme(text = element_text(size = 14, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
         axis.title = element_blank(), 
         axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.y = element_text(hjust = 0.5, color = "black")) +
@@ -331,8 +334,9 @@ fig_bacdive1_hm_org <- bacdive1_hm %>%
   geom_bar(position = "fill", width = 1) +
   scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
   theme_classic() +
-  theme(text = element_text(size = 14, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
         axis.text.y = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
         axis.title = element_blank(),
         axis.ticks.y = element_blank()) +
   scale_fill_viridis_d(guide = NULL) +
@@ -385,13 +389,14 @@ fig_bacdive1_mass_p <- bacdive1_mass_p %>%
   mutate(num_predictors = as.factor(num_predictors)) %>%
   ggplot(., aes(x = num_predictors, y = response)) +
   geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
-  labs(x = "Number of Predictors") +
+  labs(x = "Number of Predictors", y = "Fermented Carbon Source") +
   scale_x_discrete(breaks = my_breaks) +
-  scale_y_discrete(position = "right") +
+  scale_y_discrete(guide = guide_axis(position = "right")) +
   scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
   theme_minimal() +
-  theme(text = element_text(size = 14, color = "black"),
-        axis.title.y = element_blank(), 
+  theme(text = element_text(size = 16, color = "black"),
+        axis.text.y.right = element_text(hjust = .5),
+        #axis.title.y = element_blank(), 
         # axis.text.y = element_blank()
         )
 fig_bacdive1_mass_p
@@ -415,7 +420,6 @@ fig_bacdive1_mass_p8 <- bacdive1_mass_p %>%
         )
 fig_bacdive1_mass_p8
 
-
 # ordered by first p selected as predictor
 fig_bacdive1_mass_p_xfirst <- bacdive1_mass_p %>%
   arrange(xfirst) %>% mutate(response = fct_inorder(response)) %>%
@@ -429,6 +433,19 @@ fig_bacdive1_mass_p_xfirst <- bacdive1_mass_p %>%
   theme_minimal() +
   theme(text = element_text(size = 14, color = "black"),
         axis.title.y = element_blank(), axis.text.y = element_blank())
+```
+
+```{r}
+# compute entropy
+e <- lapply(select(bacdive1dat, -id), entropy) 
+# format data
+# match order to heatmap of c sources selected as predictors
+ent <- tibble(carbon_source = names(e),
+                  entropy = unlist(e)) %>%
+  mutate(carbon_source = factor(carbon_source, levels(bacdive1_mass_p$response)))
+```
+
+```{r}
 fig_bacdive1_mass_p_xfirst +
   (ent %>%
      mutate(carbon_source = factor(carbon_source, levels = levels((bacdive1_mass_p%>% mutate(response =fct_reorder(response, xfirst)))$response))) %>%
@@ -447,16 +464,6 @@ fig_bacdive1_mass_p_xfirst +
 ```
 
 ```{r}
-# compute entropy
-e <- lapply(select(bacdive1dat, -id), entropy) 
-# format data
-# match order to heatmap of c sources selected as predictors
-ent <- tibble(carbon_source = names(e),
-                  entropy = unlist(e)) %>%
-  mutate(carbon_source = factor(carbon_source, levels(bacdive1_mass_p$response)))
-```
-
-```{r}
 ### Figure bar graphs: Entropy ###
 fig_bacdive1_mass_ent <- ent %>%
   ggplot(aes(x = carbon_source, y = as.numeric(entropy), fill = carbon_source)) +
@@ -468,7 +475,7 @@ fig_bacdive1_mass_ent <- ent %>%
        y = "Shannon Entropy") +
   coord_flip() +
   theme_classic() +
-  theme(text = element_text(size = 14, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
         axis.text.y = element_blank()
         # axis.text.y = element_text(hjust = 0.5, colour = "black")
         )
@@ -501,7 +508,8 @@ fig_bacdive1_mass_mcc <- bacdive1_baseline_stats %>%
        x = "# predictors",
        y = "mean(MCC over\nall RF predictions)") +
   theme_classic() +
-  theme(legend.position = "bottom")
+  theme(text = element_text(size = 16, color = "black"),
+        legend.position = "bottom")
 fig_bacdive1_mass_mcc
 ```
 
@@ -512,11 +520,12 @@ fig_bacdive1_mass_mcc
 pdf(file = "../Results/fig-bacdive1-mass.pdf", width = 20, height = 22)
 wrap_plots(A = fig_bacdive1_hm_cond,
            B = guide_area(), 
-           C = fig_bacdive1_hm,
+           C = fig_bacdive1_hm + theme(axis.text.x = element_text(size = 10)),
            D = fig_bacdive1_hm_org,
-           E = fig_bacdive1_mass_p,
-           F = fig_bacdive1_mass_ent,
-           G = (fig_bacdive1_mass_mcc + theme(axis.title.x = element_text(vjust = 35)) + plot_layout(guides = 'keep')),
+           E = fig_bacdive1_mass_p + theme(text = element_text(size = 16), axis.text.y = element_text(size = 12)),
+           F = fig_bacdive1_mass_ent + theme(plot.margin = margin(r = 25, unit = "points")),
+           G = (fig_bacdive1_mass_mcc + theme(axis.title.x = element_text(vjust = 28),
+                                              legend.position = c(.5, -.18)) + plot_layout(guides = 'keep')),
            H = (fig_bacdive1_mass_p8 + scale_y_discrete(position = "right") + ggtitle(label = "Fermented Carbon Source")),
            I = grid::textGrob("Relevant Carbohydrate Monomers"),
            J = grid::textGrob("momomers influx metabolic map"),
@@ -536,13 +545,14 @@ HHIIIJJJJJ
 HHIIIJJJJJ
 ', guides = 'collect') +
   plot_annotation(tag_levels = list(c("A", "", "", "B", "C", "D", "E", "F", "G"))) & 
-  theme(plot.tag = element_text(size = 18))
+  theme(plot.tag = element_text(size = 18), axis.text = element_text(size = 16))
 dev.off()
 ```
 
 ## Supplementary Figure: all RF performance scores
 ```{r}
-png(filename = "../Results/fig-supp-bacdive1-rf_perf_all.png", width = 3500, height = 2000, res = 300)
+png(filename = "../Results/fig-supp-bacdive1-rf_perf_all.png", width = 3500, height = 3000, res = 300)
+#pdf(file = "../Results/fig-supp-bacdive1-rf_perf_all.pdf", width = 10, height = 8)
 fig_bacdive1_rf_perf_all <- bacdive1_baseline_stats %>%
   pivot_longer(starts_with("mean_"), names_to = "performance_score", values_to = "performance_value") %>%
   ggplot(., aes(num_predictors, performance_value, color = mass_prediction)) +
@@ -559,7 +569,7 @@ fig_bacdive1_rf_perf_all <- bacdive1_baseline_stats %>%
        # y = "mean(balanced accuracy over all RF predictions)",
        y = "mean(respective performance score over all RF predictions)") +
   facet_wrap(facets = vars(performance_score), ncol = 2) +
-  theme_classic() +
+  theme_classic(base_size = 14) +
   theme(legend.position = "bottom")
 fig_bacdive1_rf_perf_all
 dev.off()
@@ -629,9 +639,9 @@ fig_yeast_hm <- yeast_hm %>%
   scale_fill_viridis_d(labels = c("0" = "Negative", "1" = "Variable, weak,\n delayed", "2" = "Positive"), name = "Growth") +
   labs(y = "Species") +
   theme_minimal() +
-  theme(text = element_text(size = 14, color = "black"),
-        legend.text = element_text(size = 10, color = "black"),
-        legend.title = element_text(size = 10, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
+        legend.text = element_text(size = 14, color = "black"),
+        legend.title = element_text(size = 16, color = "black"),
         legend.key.size = unit(0.8, "lines"),
         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
         axis.text.y = element_blank(),
@@ -649,7 +659,7 @@ fig_yeast_hm_cond <- yeast_hm %>%
   geom_bar(position = "fill", width = 1) +
   scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
   theme_classic() +
-  theme(text = element_text(size = 14, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
         axis.title = element_blank(), 
         axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.y = element_text(hjust = 0.5, color = "black")) +
@@ -668,7 +678,8 @@ fig_yeast_hm_org <- yeast_hm %>%
   geom_bar(position = "fill", width = 1) +
   scale_y_continuous(labels = scales::percent, breaks = c(0,.5,1)) +
   theme_classic() +
-  theme(text = element_text(size = 14, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
         axis.text.y = element_blank(),
         axis.title = element_blank(),
         axis.ticks.y = element_blank()) +
@@ -702,13 +713,13 @@ fig_yeast_mass_p <- yeast_mass_p %>%
   mutate(num_predictors = as.factor(num_predictors)) %>%
   ggplot(., aes(x = num_predictors, y = response)) +
   geom_tile(aes(fill = as.factor(pred)), colour = "gray") +
-  labs(x = "Number of Predictors") +
+  labs(x = "Number of Predictors", y = "Carbon Sources") +
   scale_x_discrete(breaks = my_breaks) +
-  scale_y_discrete(position = "right") +
+  scale_y_discrete(guide = guide_axis(position = "right")) +
   scale_fill_manual(values = c("0" = "black", "1" = "gray"), guide = NULL) +
   theme_minimal() +
   theme(text = element_text(size = 14, color = "black"),
-        axis.title.y = element_blank(), 
+        #axis.title.y = element_blank(), 
         axis.text.y.right = element_text(hjust = .5)
         )
 fig_yeast_mass_p
@@ -732,13 +743,13 @@ fig_yeast_mass_ent <- ent %>%
   ggplot(aes(x = carbon_source, y = as.numeric(entropy), fill = carbon_source)) +
   geom_col(width = 1) +
   scale_fill_viridis_d(direction = -1) +
-  scale_y_continuous(breaks = c(0,.5,1)) +
+  scale_y_continuous(breaks = c(0,.5,1, 1.5)) +
   guides(fill = "none") +
   labs(x = "",
        y = "Shannon Entropy") +
   coord_flip() +
   theme_classic() +
-  theme(text = element_text(size = 14, color = "black"),
+  theme(text = element_text(size = 16, color = "black"),
         # axis.text.y = element_text(hjust = 0.5, colour = "black"),
         axis.text.y = element_blank()
         )
@@ -769,21 +780,23 @@ fig_yeast_mass_mcc <- yeast_baseline_stats %>%
        x = "# predictors",
        y = "mean(MCC over\nall RF predictions)") +
   theme_classic() +
-  theme(legend.position = "bottom")
+  theme(text = element_text(size = 16, color = "black"),
+        legend.position = "bottom")
 fig_yeast_mass_mcc
 ```
 
 ### Plot assembly
 ```{r}
 # plot assembly
-png(filename = "../Results/fig-yeast-mass.png", width = 5500, height = 4300, res = 300)
+#png(filename = "../Results/fig-yeast-mass.png", width = 5500, height = 4300, res = 300)
+pdf(file = "../Results/fig-yeast-mass.pdf", width = 20, height = 16)
 wrap_plots(A = fig_yeast_hm_cond,
            B = guide_area(), 
-           C = fig_yeast_hm,
+           C = fig_yeast_hm + theme(axis.text.x = element_text(size = 10)),
            D = fig_yeast_hm_org,
-           E = fig_yeast_mass_p,
-           F = fig_yeast_mass_ent,
-           G = (fig_yeast_mass_mcc + theme(axis.title.x = element_text(vjust = 25)) + plot_layout(guides = 'keep')),
+           E = fig_yeast_mass_p + theme(axis.text.y = element_text(size = 12)),
+           F = fig_yeast_mass_ent + theme(plot.margin = margin(r = 25, unit = "points")),
+           G = (fig_yeast_mass_mcc + theme(axis.title.x = element_text(vjust = 20)) + plot_layout(guides = 'keep')),
            design = '
 AAAABEEEEF
 CCCCDEEEEF
@@ -797,14 +810,13 @@ CCCCDGGGGG
 CCCCDGGGGG
 ', guides = 'collect') +
   plot_annotation(tag_levels = list(c("A", "", "", "B", "C", "D", "E"))) & 
-  theme(plot.tag = element_text(size = 18))
+  theme(plot.tag = element_text(size = 18), axis.text = element_text(size = 16))
 dev.off()
 ```
 
-
 ## Supplementary Figure: all RF performance scores
 ```{r}
-png(filename = "../Results/fig-supp-yeast-rf_perf_all.png", width = 3500, height = 2000, res = 300)
+png(filename = "../Results/fig-supp-yeast-rf_perf_all.png", width = 3500, height = 3000, res = 300)
 fig_yeast_rf_perf_all <- yeast_baseline_stats %>%
   pivot_longer(starts_with("mean_"), names_to = "performance_score", values_to = "performance_value") %>%
   ggplot(., aes(num_predictors, performance_value, color = mass_prediction)) +
@@ -820,7 +832,7 @@ fig_yeast_rf_perf_all <- yeast_baseline_stats %>%
        # y = "mean(balanced accuracy over all RF predictions)",
        y = "mean(respect. performance score over all RF predictions)") +
     facet_wrap(facets = vars(performance_score), ncol = 2) +
-  theme_classic() +
+  theme_classic(base_size = 14) +
   theme(legend.position = "bottom")
 fig_yeast_rf_perf_all
 dev.off()

@@ -2,7 +2,7 @@
 
 ## Content
  - DATASET 1: marine
-     - MASS: _MISSING_ (jupyter notebook)
+     - MASS: [MASS-marine.ipynb](./Code/MASS-marine.ipynb) (jupyter notebook)
      - RF: [RF_evalutation_w_baseline-marine.ipynb](./Code/RF_evalutation_w_baseline-marine.ipynb) (jupyter notebook)
  - DATASET 2: fermentation (BacDive1)
      - data download and preparation: [download_bacdive_traits.Rmd](./Code/download_bacdive_traits.Rmd) (Rmarkdown notebook)
@@ -20,10 +20,10 @@
      - [x] DS2
      - [x] DS3
  - [ ] MASS notebooks
-     - [ ] DS1
+     - [x] DS1
      - [ ] DS2
      - [ ] DS3
-  - [ ] clean-up repo (delete?? GIT_milp_multiclass_11_65.py , MIP_classify_RF_f1_score_agg.csv, compare_classify_RF_f1_score_ag, MIP_classify_f1_scores_greedy2_2,MIP_classify_z_all76_greedy2.csv )
+  - [x] clean-up repo (delete?? GIT_milp_multiclass_11_65.py , MIP_classify_RF_f1_score_agg.csv, compare_classify_RF_f1_score_ag, MIP_classify_f1_scores_greedy2_2,MIP_classify_z_all76_greedy2.csv )
  - [ ] update readme (abstract, usage etc.)
 
 ## Citation

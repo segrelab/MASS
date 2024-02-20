@@ -198,7 +198,7 @@ wrap_plots(A = fig_marine_hm,
 ABC
 ADD
 ', heights = c(1,1), widths = c(3,3,1)) +
-  plot_annotation(tag_levels = "A") & 
+  plot_annotation(tag_levels = "a") & 
   theme(plot.tag = element_text(size = 18), axis.text = element_text(size = 16))
 dev.off()
 ```
@@ -240,7 +240,7 @@ marine_mcc_js <- read_csv("../Results/MIP_marine_baseline_20230913_stats-mcc_js.
   mutate(response = factor(response, levels = levels(fct_reorder(marine_mass_p$response, marine_mass_p$x))))
 
 fig_marine_mass_perattr_mcc <- marine_mcc_js %>%
-  ggplot(aes(x = as.factor(num_predictors), y = mean_mcc, color = response)) +
+  ggplot(aes(x = as.factor(num_predictors), y = mean_mcc)) +
   geom_point(aes(size = sd_mcc), alpha = .75) +
   theme_classic() +
   theme(text = element_text(size = 14),
@@ -357,7 +357,7 @@ fig_bacdive1_hm_org
 AB
 CD
 ', heights = c(1, 9), widths = c(6,1), guides = 'collect') +
-  plot_annotation(tag_levels = "A") & 
+  plot_annotation(tag_levels = "a") & 
   theme(plot.tag = element_text(size = 18))
 # dev.off()
 ```
@@ -544,7 +544,7 @@ HHIIIJJJJJ
 HHIIIJJJJJ
 HHIIIJJJJJ
 ', guides = 'collect') +
-  plot_annotation(tag_levels = list(c("A", "", "", "B", "C", "D", "E", "F", "G"))) & 
+  plot_annotation(tag_levels = list(c("a", "", "", "b", "c", "d", "e", "f", "g"))) & 
   theme(plot.tag = element_text(size = 18), axis.text = element_text(size = 16))
 dev.off()
 ```
@@ -701,7 +701,7 @@ fig_yeast_hm_org
 AB
 CD
 ', heights = c(1, 9), widths = c(6,1), guides = 'collect') +
-  plot_annotation(tag_levels = "A") & 
+  plot_annotation(tag_levels = "a") & 
   theme(plot.tag = element_text(size = 18))
 # dev.off()
 ```
@@ -809,7 +809,7 @@ CCCCDGGGGG
 CCCCDGGGGG
 CCCCDGGGGG
 ', guides = 'collect') +
-  plot_annotation(tag_levels = list(c("A", "", "", "B", "C", "D", "E"))) & 
+  plot_annotation(tag_levels = list(c("a", "", "", "b", "c", "d", "e"))) & 
   theme(plot.tag = element_text(size = 18), axis.text = element_text(size = 16))
 dev.off()
 ```
@@ -889,7 +889,7 @@ AABB
 DCCE
 DCCE
 ', guides = 'collect') +
-  plot_annotation(tag_levels = 'A') & 
+  plot_annotation(tag_levels = 'a') & 
   theme(plot.tag = element_text(size = 18))
 dev.off()
 ```

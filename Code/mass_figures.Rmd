@@ -86,7 +86,8 @@ gp <- readxl::read_xlsx('../Data/growth_profiles_binary.xlsx')
 ```{r}
 gp_ent <- lapply(gp[,-1], entropy) 
 ent <- data.frame(medium = names(gp_ent),
-                  entropy = unlist(gp_ent))
+                  entropy = unlist(gp_ent)) %>%
+  write_tsv("../Results/data-marine-entropy.tsv")
 ```
 
 ```{r}
@@ -166,7 +167,8 @@ marine_baseline_stats <- read_performance_scores("../Results/MIP_marine_baseline
   left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
   left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
   left_join(., read_performance_scores("../Results/MIP_marine_baseline_20231213_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-    mutate(num_predictors = factor(num_predictors, levels = 1:10))
+    mutate(num_predictors = factor(num_predictors, levels = 1:10)) %>%
+  write_tsv("../Results/data-MIP_marine_baseline_20231213_stats.tsv")
 
 # just MCC
 fig_marine_mass_mcc <- marine_baseline_stats %>%
@@ -442,7 +444,8 @@ e <- lapply(select(bacdive1dat, -id), entropy)
 # match order to heatmap of c sources selected as predictors
 ent <- tibble(carbon_source = names(e),
                   entropy = unlist(e)) %>%
-  mutate(carbon_source = factor(carbon_source, levels(bacdive1_mass_p$response)))
+  mutate(carbon_source = factor(carbon_source, levels(bacdive1_mass_p$response))) %>%
+  write_tsv("../Results/data-bacdive1-entropy.tsv")
 ```
 
 ```{r}
@@ -492,7 +495,8 @@ bacdive1_baseline_stats <- read_performance_scores("../Results/MIP_bacdive1_base
   left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
   left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
   left_join(., read_performance_scores("../Results/MIP_bacdive1_baseline_20230523_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-    mutate(num_predictors = factor(num_predictors, levels = 1:45))
+    mutate(num_predictors = factor(num_predictors, levels = 1:45)) %>%
+  write_tsv("../Results/data-MIP_bacdive1_baseline_20230523_stats.tsv")
 
 # just MCC
 fig_bacdive1_mass_mcc <- bacdive1_baseline_stats %>%
@@ -734,7 +738,8 @@ e <- lapply(select(yeastdat, -species), entropy)
 ent <- tibble(carbon_source = names(e),
                   entropy = unlist(e)) %>%
   filter(carbon_source != "D-Glucose") %>%
-  mutate(carbon_source = factor(carbon_source, levels(yeast_mass_p$response)))
+  mutate(carbon_source = factor(carbon_source, levels(yeast_mass_p$response)))  %>%
+  write_tsv("../Results/data-yeast-entropy.tsv")
 ```
 
 ```{r}
@@ -764,7 +769,8 @@ yeast_baseline_stats <- read_performance_scores("../Results/MIP_yeast_baseline_2
   left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-jaccard.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
   left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-cohen_kappa.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
   left_join(., read_performance_scores("../Results/MIP_yeast_baseline_20230411_stats-mcc.csv"), by = c("num_predictors", "i", "predictors", "mass_prediction")) %>%
-    mutate(num_predictors = factor(num_predictors, levels = 1:36))
+    mutate(num_predictors = factor(num_predictors, levels = 1:36)) %>%
+  write_tsv("../Results/data-MIP_yeast_baseline_20230411_stats.tsv")
 
 # just MCC
 fig_yeast_mass_mcc <- yeast_baseline_stats %>%
